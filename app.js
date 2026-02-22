@@ -98,7 +98,7 @@ function policyEngine(uKey, rKey, ctx, isAttack) {
   risk = Math.min(risk, 100);
   const critFail = checks.some(function(c){ return !c.passed && c.riskLevel==='critical'; });
   const anyFail  = checks.some(function(c){ return !c.passed; });
-  const allowed  = !anyFail && risk < 60 && !critFail;
+  const allowed  = !anyFail && !critFail;
 
   return { allowed, checks, risk, user:u, resource:r };
 }
