@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zero Trust Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #060910;
+  --surface:   #0c1220;
+  --surface2:  #111927;
+  --border:    #1a2740;
+  --border2:   #243550;
+  --accent:    #0af;
+  --green:     #0f9;
+  --red:       #f45;
+  --yellow:    #fa0;
+  --purple:    #a78bfa;
+  --text:      #b8cce0;
+  --text2:     #5a7a9a;
+  --mono:      'JetBrains Mono', monospace;
+  --arabic:    'Cairo', sans-serif;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--arabic);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Scanline overlay ── */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events:none;
+  z-index:999;
+}
+
+/* ── Grid bg ── */
+body::after {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(0,170,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,170,255,0.025) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events:none;
+  z-index:0;
+}
+
+.wrap {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+  position: relative;
+  z-index:1;
+}
+
+/* ────────────── HEADER ────────────── */
+header {
+  padding: 50px 0 40px;
+  text-align: center;
+  position: relative;
+}
+
+.header-tag {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 4px;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  opacity: 0.7;
+}
+
+header h1 {
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 900;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #fff 0%, var(--accent) 50%, var(--green) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+
+header p {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--text2);
+  max-width: 500px;
+  margin: 0 auto 20px;
+  line-height: 1.7;
+}
+
+.principles {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1px solid;
+  letter-spacing: 1px;
+}
+.pill.blue  { border-color: rgba(0,170,255,0.4); color: var(--accent); background: rgba(0,170,255,0.07); }
+.pill.green { border-color: rgba(0,255,153,0.4); color: var(--green);  background: rgba(0,255,153,0.07); }
+.pill.red   { border-color: rgba(255,68,85,0.4);  color: var(--red);   background: rgba(255,68,85,0.07); }
+
+/* ────────────── STATS BAR ────────────── */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 14px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat::before {
+  content:'';
+  position: absolute;
+  top:0; left:0; right:0;
+  height: 2px;
+}
+.stat.total::before  { background: var(--accent); }
+.stat.allow::before  { background: var(--green); }
+.stat.deny::before   { background: var(--red); }
+.stat.risk::before   { background: var(--yellow); }
+
+.stat-n {
+  font-family: var(--mono);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.stat.total .stat-n { color: var(--accent); }
+.stat.allow .stat-n { color: var(--green); }
+.stat.deny  .stat-n { color: var(--red); }
+.stat.risk  .stat-n { color: var(--yellow); }
+
+.stat-l {
+  font-size: 0.7rem;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+
+/* ────────────── MAIN LAYOUT ────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ────────────── PANEL ────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.panel-head {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ────────────── USER CARDS ────────────── */
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: all 0.18s;
+}
+.user-card:hover { border-color: var(--border2); background: rgba(255,255,255,0.02); }
+.user-card.sel   { border-color: var(--accent); background: rgba(0,170,255,0.06); }
+
+.avatar {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.uinfo h3 { font-size: 0.88rem; font-weight: 700; margin-bottom: 2px; }
+.uinfo small { font-family: var(--mono); font-size: 0.65rem; color: var(--text2); }
+
+.role-tag {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  padding: 2px 8px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-top: 5px;
+  letter-spacing: 1px;
+}
+
+/* ────────────── RESOURCE LIST ────────────── */
+.res-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  transition: all 0.18s;
+}
+.res-item:hover { border-color: var(--border2); background: rgba(255,255,255,0.02); }
+.res-item.sel   { border-color: var(--yellow); background: rgba(255,170,0,0.06); }
+
+.res-left { display: flex; align-items: center; gap: 10px; }
+
+.sensitivity {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+.s-critical { background: rgba(255,68,85,0.15);  color: var(--red);    border: 1px solid rgba(255,68,85,0.3); }
+.s-high     { background: rgba(255,170,0,0.15);  color: var(--yellow); border: 1px solid rgba(255,170,0,0.3); }
+.s-low      { background: rgba(0,255,153,0.1);   color: var(--green);  border: 1px solid rgba(0,255,153,0.25); }
+
+/* ────────────── CONTEXT FORM ────────────── */
+.ctx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ctx-item label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 6px;
+}
+
+.ctx-item select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.ctx-item select:focus { border-color: var(--accent); }
+
+/* ────────────── BUTTONS ────────────── */
+.btn {
+  width: 100%;
+  padding: 13px 20px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--arabic);
+  font-weight: 700;
+  font-size: 0.92rem;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0090cc, #00bbff);
+  color: #000;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,170,255,0.3); }
+
+.btn-attack {
+  background: transparent;
+  border: 1px solid rgba(255,68,85,0.5);
+  color: var(--red);
+}
+.btn-attack:hover { background: rgba(255,68,85,0.08); border-color: var(--red); }
+
+.btn-reset {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 0.8rem;
+  padding: 8px;
+}
+.btn-reset:hover { border-color: var(--text2); color: var(--text); }
+
+/* ────────────── RIGHT COLUMN ────────────── */
+.right { display: flex; flex-direction: column; gap: 16px; }
+
+/* ────────────── ATTACK BANNER ────────────── */
+.attack-banner {
+  display: none;
+  background: rgba(255,170,0,0.07);
+  border: 1px solid rgba(255,170,0,0.4);
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--yellow);
+  animation: blink 1.5s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+/* ────────────── RESULT ────────────── */
+.result-wrap {
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.result-empty {
+  text-align: center;
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 2;
+}
+
+.result-box {
+  width: 100%;
+  border-radius: 10px;
+  padding: 22px;
+  border: 1px solid;
+  animation: fadeUp 0.3s ease;
+  display: none;
+}
+.result-box.allow { border-color: rgba(0,255,153,0.4); background: rgba(0,255,153,0.04); }
+.result-box.deny  { border-color: rgba(255,68,85,0.4);  background: rgba(255,68,85,0.04); }
+
+@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.result-icon-big { font-size: 2.5rem; line-height: 1; }
+
+.result-verdict {
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+.allow .result-verdict { color: var(--green); }
+.deny  .result-verdict { color: var(--red); }
+
+.result-meta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text2);
+  margin-top: 4px;
+}
+
+.risk-meter {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.risk-bar-wrap {
+  flex:1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+/* ────────────── CHECKS ────────────── */
+.checks-list { list-style: none; }
+
+.check {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  animation: slideR 0.3s ease both;
+}
+@keyframes slideR { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
+
+.check-mark { flex-shrink:0; font-size:0.9rem; margin-top:2px; }
+
+.check-name {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--text2);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.check-reason {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.check-reason.pass { color: var(--green); }
+.check-reason.fail { color: var(--red); }
+
+.risk-badge {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  margin-right: auto;
+  margin-top: 3px;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+.rb-critical { background:rgba(255,68,85,0.15); color:var(--red); }
+.rb-high     { background:rgba(255,170,0,0.15); color:var(--yellow); }
+.rb-medium   { background:rgba(167,139,250,0.15); color:var(--purple); }
+.rb-low      { background:rgba(0,255,153,0.1); color:var(--green); }
+.rb-info     { background:rgba(0,170,255,0.1); color:var(--accent); }
+
+/* ────────────── COMPARE ────────────── */
+.compare-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.compare-col h4 {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.compare-col.old h4 { color: var(--red); }
+.compare-col.new h4 { color: var(--green); }
+
+.compare-item {
+  font-size: 0.8rem;
+  color: var(--text2);
+  padding: 5px 0;
+  display: flex;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+/* ────────────── LOG ────────────── */
+.log-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+}
+.log-box::-webkit-scrollbar { width:3px; }
+.log-box::-webkit-scrollbar-thumb { background: var(--border2); border-radius:2px; }
+
+.log-row {
+  display: grid;
+  grid-template-columns: 75px 68px 1fr;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  align-items: center;
+}
+.log-time { color: var(--text2); }
+.log-status { font-weight:700; }
+.log-status.ok     { color: var(--green); }
+.log-status.denied { color: var(--red); }
+.log-status.attack { color: var(--yellow); }
+.log-msg { color: var(--text); }
+
+.log-empty {
+  text-align:center;
+  color:var(--text2);
+  padding:20px 0;
+}
+
+/* ────────────── SCENARIOS ────────────── */
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.scenario-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--arabic);
+  font-size: 0.78rem;
+  text-align: right;
+  transition: all 0.18s;
+  line-height: 1.4;
+}
+.scenario-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ────────────── FOOTER ────────────── */
+footer {
+  text-align:center;
+  padding: 30px 0 10px;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--text2);
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+}
+
+/* ────────────── RESPONSIVE ────────────── */
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  .stats-bar { grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 480px) {
+  .compare-cols { grid-template-columns: 1fr; }
+  .ctx-grid { grid-template-columns: 1fr; }
+  .scenario-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header>
+  <div class="header-tag">// Cybersecurity Project — Bader Alotaibi</div>
+  <h1>Zero Trust Access Simulator</h1>
+  <p>محرك سياسات أمني يُطبّق مبدأ "لا ثقة بالأحد" —<br>كل طلب وصول يُفحص من 7 زوايا قبل القرار.</p>
+  <div class="principles">
+    <span class="pill blue">لا ثقة ضمنية</span>
+    <span class="pill green">تحقق دائم</span>
+    <span class="pill red">أقل صلاحية ممكنة</span>
+  </div>
+</header>
+
+<!-- ═══════════════ STATS ═══════════════ -->
+<div class="stats-bar">
+  <div class="stat total">
+    <div class="stat-n" id="sTotal">0</div>
+    <div class="stat-l">إجمالي الطلبات</div>
+  </div>
+  <div class="stat allow">
+    <div class="stat-n" id="sAllow">0</div>
+    <div class="stat-l">مسموح</div>
+  </div>
+  <div class="stat deny">
+    <div class="stat-n" id="sDeny">0</div>
+    <div class="stat-l">مرفوض</div>
+  </div>
+  <div class="stat risk">
+    <div class="stat-n" id="sRisk">—</div>
+    <div class="stat-l">متوسط الخطورة</div>
+  </div>
+</div>
+
+<!-- ═══════════════ MAIN LAYOUT ═══════════════ -->
+<div class="layout">
+
+  <!-- ── LEFT COLUMN ── -->
+  <div class="left-col">
+
+    <!-- Users -->
+    <div class="panel">
+      <div class="panel-head">👤 المستخدم</div>
+
+      <div class="user-card sel" onclick="selectUser(this,'admin')">
+        <div class="avatar" style="background:rgba(0,170,255,0.1)">👑</div>
+        <div class="uinfo">
+          <h3>أحمد المنصور</h3>
+          <small><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f5949d989091b5969a8785db969a98">[email&#160;protected]</a></small>
+          <div class="role-tag" style="background:rgba(0,170,255,0.12);color:var(--accent)">ADMIN · CLEARANCE 3</div>
+        </div>
+      </div>
+
+      <div class="user-card" onclick="selectUser(this,'employee')">
+        <div class="avatar" style="background:rgba(0,255,153,0.08)">👩‍💻</div>
+        <div class="uinfo">
+          <h3>سارة الغامدي</h3>
+          <small><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7d0e1c0f1c3d1e120f0d531e1210">[email&#160;protected]</a></small>
+          <div class="role-tag" style="background:rgba(0,255,153,0.1);color:var(--green)">EMPLOYEE · CLEARANCE 2</div>
+        </div>
+      </div>
+
+      <div class="user-card" onclick="selectUser(this,'guest')">
+        <div class="avatar" style="background:rgba(255,170,0,0.08)">🧑</div>
+        <div class="uinfo">
+          <h3>زائر مجهول</h3>
+          <small><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="8deaf8e8fef9cdf8e3e6e3e2fae3a3eee2e0">[email&#160;protected]</a></small>
+          <div class="role-tag" style="background:rgba(255,170,0,0.1);color:var(--yellow)">GUEST · CLEARANCE 1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resources -->
+    <div class="panel">
+      <div class="panel-head">🗄️ المورد المطلوب</div>
+
+      <div class="res-item sel" onclick="selectRes(this,'secret_files')">
+        <div class="res-left">🔒 <span>ملفات سرية</span></div>
+        <span class="sensitivity s-critical">CRITICAL</span>
+      </div>
+      <div class="res-item" onclick="selectRes(this,'api')">
+        <div class="res-left">⚡ <span>Internal API</span></div>
+        <span class="sensitivity s-high">HIGH</span>
+      </div>
+      <div class="res-item" onclick="selectRes(this,'database')">
+        <div class="res-left">🗃️ <span>قاعدة البيانات</span></div>
+        <span class="sensitivity s-critical">CRITICAL</span>
+      </div>
+      <div class="res-item" onclick="selectRes(this,'public_dashboard')">
+        <div class="res-left">📊 <span>لوحة عامة</span></div>
+        <span class="sensitivity s-low">LOW</span>
+      </div>
+    </div>
+
+    <!-- Context -->
+    <div class="panel">
+      <div class="panel-head">🌐 سياق الطلب (Context)</div>
+
+      <div class="ctx-grid">
+        <div class="ctx-item">
+          <label>📍 الموقع</label>
+          <select id="location">
+            <option value="office">🏢 المكتب</option>
+            <option value="home">🏠 المنزل</option>
+            <option value="unknown">❓ مجهول</option>
+          </select>
+        </div>
+        <div class="ctx-item">
+          <label>💻 الجهاز</label>
+          <select id="device">
+            <option value="managed">🔐 جهاز الشركة</option>
+            <option value="personal">📱 جهاز شخصي</option>
+            <option value="unknown">❓ مجهول</option>
+          </select>
+        </div>
+        <div class="ctx-item">
+          <label>🕐 الوقت</label>
+          <select id="timeSlot">
+            <option value="work_hours">☀️ أوقات الدوام</option>
+            <option value="after_hours">🌆 بعد الدوام</option>
+            <option value="midnight">🌙 منتصف الليل</option>
+          </select>
+        </div>
+        <div class="ctx-item">
+          <label>🔑 المصادقة</label>
+          <select id="mfa">
+            <option value="yes">✅ MFA مفعّل</option>
+            <option value="no">❌ بدون MFA</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="runCheck(false)">
+        🔍 تحقق من الوصول
+      </button>
+      <button class="btn btn-attack" onclick="runAttack()">
+        ⚠️ محاكاة هجوم — بيانات مسروقة
+      </button>
+      <button class="btn btn-reset" onclick="resetAll()">↺ إعادة ضبط</button>
+    </div>
+
+    <!-- Quick Scenarios -->
+    <div class="panel">
+      <div class="panel-head">⚡ سيناريوهات جاهزة</div>
+      <div class="scenario-grid">
+        <button class="scenario-btn" onclick="loadScenario('normal')">✅ مدير من المكتب</button>
+        <button class="scenario-btn" onclick="loadScenario('wrong_role')">❌ موظفة تخترق ملفات</button>
+        <button class="scenario-btn" onclick="loadScenario('no_mfa')">❌ مدير بدون MFA</button>
+        <button class="scenario-btn" onclick="loadScenario('attack')">🚨 هجوم ببيانات مسروقة</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT COLUMN ── -->
+  <div class="right">
+
+    <!-- Attack Banner -->
+    <div class="attack-banner" id="attackBanner">
+      🚨 وضع الهجوم نشط — المهاجم يمتلك كلمة المرور لكن Zero Trust يكشفه من السياق!
+    </div>
+
+    <!-- Decision -->
+    <div class="panel">
+      <div class="panel-head">⚖️ قرار محرك السياسات (Policy Engine)</div>
+
+      <div class="result-wrap" id="resultWrap">
+        <div class="result-empty">
+          <div style="font-size:2rem;margin-bottom:10px">🛡️</div>
+          اختر المستخدم والمورد وعوامل السياق<br>
+          ثم اضغط "تحقق من الوصول"
+        </div>
+      </div>
+    </div>
+
+    <!-- Compare -->
+    <div class="panel">
+      <div class="panel-head">🔄 Traditional Security vs Zero Trust</div>
+      <div class="compare-cols">
+        <div class="compare-col old">
+          <h4>نظام تقليدي (قديم)</h4>
+          <div class="compare-item">❌ <span>يثق بكل من داخل الشبكة</span></div>
+          <div class="compare-item">❌ <span>كلمة المرور = دخول كامل</span></div>
+          <div class="compare-item">❌ <span>لا يهتم بنوع الجهاز</span></div>
+          <div class="compare-item">❌ <span>لا يراقب الوقت أو الموقع</span></div>
+          <div class="compare-item">❌ <span>بيانات مسروقة = اختراق تام</span></div>
+          <div class="compare-item">❌ <span>لا يوجد Risk Score</span></div>
+        </div>
+        <div class="compare-col new">
+          <h4>Zero Trust (هذا النظام)</h4>
+          <div class="compare-item">✅ <span>يفحص كل طلب بغض النظر عن المصدر</span></div>
+          <div class="compare-item">✅ <span>RBAC + Clearance Level</span></div>
+          <div class="compare-item">✅ <span>Device Trust (managed/personal/unknown)</span></div>
+          <div class="compare-item">✅ <span>Time + Location Context</span></div>
+          <div class="compare-item">✅ <span>Anomaly Detection يكشف السرقة</span></div>
+          <div class="compare-item">✅ <span>Risk Score لكل طلب</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel">
+      <div class="panel-head">📋 سجل الأحداث (Audit Log)</div>
+      <div class="log-box" id="logBox">
+        <div class="log-empty">// لا توجد أحداث بعد — ابدأ بفحص طلب وصول</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  Zero Trust Simulator — Cybersecurity & Network Security Project<br>
+  by <strong style="color:var(--accent)">Bader Alotaibi</strong> · مبني بـ: Python Policy Engine + Vanilla JS + HTML/CSS · بدون استضافة · بدون API خارجي
+</footer>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ════════════════════════════════
+//   State
+// ════════════════════════════════
+let selectedUser     = 'admin';
+let selectedResource = 'secret_files';
+let stats = { total:0, allowed:0, denied:0, riskSum:0 };
+let logEntries = [];
+
+// ════════════════════════════════
+//   Data (mirrors Python backend)
+// ════════════════════════════════
+const USERS = {
+  admin:    { name:'أحمد المنصور', role:'admin',    email:'ahmed@corp.com',   clearance:3 },
+  employee: { name:'سارة الغامدي', role:'employee', email:'sara@corp.com',    clearance:2 },
+  guest:    { name:'زائر مجهول',   role:'guest',    email:'guest@unknown.com',clearance:1 },
+};
+
+const RESOURCES = {
+  secret_files:     { name:'ملفات سرية',    minClearance:3, requiresMFA:true,  roles:['admin'],                      sensitivity:'critical' },
+  api:              { name:'Internal API',   minClearance:2, requiresMFA:true,  roles:['admin','employee'],           sensitivity:'high' },
+  database:         { name:'قاعدة البيانات',minClearance:3, requiresMFA:true,  roles:['admin'],                      sensitivity:'critical' },
+  public_dashboard: { name:'لوحة عامة',     minClearance:1, requiresMFA:false, roles:['admin','employee','guest'],   sensitivity:'low' },
+};
+
+// ════════════════════════════════
+//   Policy Engine (JS mirror)
+// ════════════════════════════════
+function policyEngine(uKey, rKey, ctx, isAttack) {
+  const u = USERS[uKey];
+  const r = RESOURCES[rKey];
+  const checks = [];
+  let risk = 0;
+
+  const add = (name, passed, reason, riskLevel, extraRisk=0) => {
+    checks.push({ name, passed, reason, riskLevel });
+    if (!passed) risk += extraRisk;
+  };
+
+  // 1. RBAC
+  const roleOK = r.roles.includes(u.role);
+  add('التحقق من الدور (RBAC)', roleOK,
+    roleOK ? `دور '${u.role}' مسموح له بالوصول`
+           : `دور '${u.role}' لا يملك صلاحية الوصول لهذا المورد`,
+    roleOK ? 'info' : 'critical', 40);
+
+  // 2. Clearance
+  const clrOK = u.clearance >= r.minClearance;
+  add('مستوى التصريح (Clearance)', clrOK,
+    clrOK ? `المستوى ${u.clearance} ≥ المطلوب ${r.minClearance}`
+          : `المستوى ${u.clearance} أقل من المطلوب ${r.minClearance}`,
+    clrOK ? 'info' : 'high', 30);
+
+  // 3. MFA
+  const mfaOK = !r.requiresMFA || ctx.mfa === 'yes';
+  add('المصادقة الثنائية (MFA)', mfaOK,
+    ctx.mfa === 'yes' ? 'MFA مفعّل ✓'
+      : (!r.requiresMFA ? 'MFA غير مطلوب لهذا المورد'
+                        : 'MFA مطلوب للمورد الحساس ولكنه غير مفعّل!'),
+    mfaOK ? 'info' : 'high', 25);
+
+  // 4. Device
+  const devMap = { managed:0, personal:10, unknown:35 };
+  const devOK = ctx.device !== 'unknown';
+  risk += devMap[ctx.device] || 35;
+  add('نوع الجهاز (Device Trust)', devOK,
+    ({ managed:'جهاز الشركة ← موثوق تماماً', personal:'جهاز شخصي ← مقبول بحذر', unknown:'جهاز مجهول ← رفض تلقائي!' })[ctx.device],
+    ctx.device==='unknown' ? 'critical' : ctx.device==='managed' ? 'low' : 'medium', 15);
+
+  // 5. Location
+  const locMap = { office:0, home:8, unknown:30 };
+  const locOK = !(ctx.location==='unknown' && ['high','critical'].includes(r.sensitivity));
+  risk += locMap[ctx.location] || 30;
+  add('الموقع الجغرافي (Location)', locOK,
+    ({ office:'داخل مكاتب الشركة ← موثوق', home:'الوصول من المنزل ← مقبول مع مراقبة', unknown:'موقع مجهول ← خطر على الموارد الحساسة!' })[ctx.location],
+    ctx.location==='unknown' && r.sensitivity==='critical' ? 'critical' : ctx.location==='unknown' ? 'medium' : 'info', 10);
+
+  // 6. Time
+  const timeMap = { work_hours:0, after_hours:10, midnight:25 };
+  const timeOK = !(ctx.time==='midnight' && r.minClearance >= 2);
+  risk += timeMap[ctx.time] || 25;
+  add('وقت الوصول (Time Policy)', timeOK,
+    ({ work_hours:'ضمن أوقات الدوام الرسمي ← طبيعي', after_hours:'بعد الدوام ← مقبول مع تسجيل', midnight:'منتصف الليل ← نشاط غير اعتيادي! مشبوه.' })[ctx.time],
+    ctx.time==='midnight' ? 'high' : 'info', 10);
+
+  // 7. Attack Detection
+  if (isAttack) {
+    const blocked = r.minClearance >= 2;
+    add('🚨 Anomaly Detection (كشف التهديدات)', !blocked,
+      blocked
+        ? 'نمط مشبوه: موقع مجهول + جهاز مجهول + منتصف الليل = بيانات مسروقة محتملة! Zero Trust يوقف الهجوم.'
+        : 'لم يُكتشف نمط هجوم واضح',
+      blocked ? 'critical' : 'info', blocked ? 50 : 0);
+    if (blocked) risk += 50;
+  }
+
+  risk = Math.min(risk, 100);
+  const critFail = checks.some(c => !c.passed && c.riskLevel==='critical');
+  const anyFail  = checks.some(c => !c.passed);
+  const allowed  = !anyFail && risk < 60 && !critFail;
+
+  return { allowed, checks, risk, user:u, resource:r };
+}
+
+// ════════════════════════════════
+//   Render
+// ════════════════════════════════
+function runCheck(isAttack=false) {
+  document.getElementById('attackBanner').style.display = isAttack ? 'flex' : 'none';
+
+  const ctx = {
+    mfa:      document.getElementById('mfa').value,
+    device:   document.getElementById('device').value,
+    location: document.getElementById('location').value,
+    time:     document.getElementById('timeSlot').value,
+  };
+
+  const res = policyEngine(selectedUser, selectedResource, ctx, isAttack);
+
+  // Stats
+  stats.total++;
+  if (res.allowed) stats.allowed++; else stats.denied++;
+  stats.riskSum += res.risk;
+  updateStats();
+
+  // Result HTML
+  const cls = res.allowed ? 'allow' : 'deny';
+  const checks = res.checks.map((c, i) => `
+    <li class="check" style="animation-delay:${i*0.06}s">
+      <span class="check-mark">${c.passed ? '✅' : '❌'}</span>
+      <div style="flex:1">
+        <div class="check-name">${c.name}</div>
+        <div class="check-reason ${c.passed ? 'pass':'fail'}">${c.reason}</div>
+        ${!c.passed ? `<span class="risk-badge rb-${c.riskLevel}">${c.riskLevel.toUpperCase()}</span>` : ''}
+      </div>
+    </li>`).join('');
+
+  const riskColor = res.risk < 30 ? '#0f9' : res.risk < 60 ? '#fa0' : '#f45';
+  const passed = res.checks.filter(c=>c.passed).length;
+
+  document.getElementById('resultWrap').innerHTML = `
+    <div class="result-box ${cls}" style="display:block">
+      <div class="result-header">
+        <div class="result-icon-big">${res.allowed ? '✅' : '🚫'}</div>
+        <div style="flex:1">
+          <div class="result-verdict">${res.allowed ? 'وصول مسموح' : 'وصول مرفوض'}</div>
+          <div class="result-meta">${res.user.name} ← ${res.resource.name} · اجتاز ${passed}/${res.checks.length} فحوصات</div>
+          <div class="risk-meter" style="margin-top:8px">
+            <span style="font-family:var(--mono);font-size:0.65rem;color:var(--text2)">Risk:</span>
+            <div class="risk-bar-wrap">
+              <div class="risk-bar-fill" style="width:${res.risk}%;background:${riskColor}"></div>
+            </div>
+            <span style="font-family:var(--mono);font-size:0.7rem;color:${riskColor};font-weight:700">${res.risk}/100</span>
+          </div>
+        </div>
+      </div>
+      <ul class="checks-list">${checks}</ul>
+    </div>`;
+
+  // Log
+  addLog(res, isAttack);
+}
+
+function runAttack() {
+  // Force suspicious context
+  document.getElementById('location').value = 'unknown';
+  document.getElementById('device').value   = 'unknown';
+  document.getElementById('timeSlot').value = 'midnight';
+  document.getElementById('mfa').value      = 'yes'; // attacker HAS the password + MFA somehow
+  runCheck(true);
+}
+
+function updateStats() {
+  document.getElementById('sTotal').textContent = stats.total;
+  document.getElementById('sAllow').textContent = stats.allowed;
+  document.getElementById('sDeny').textContent  = stats.denied;
+  document.getElementById('sRisk').textContent  = stats.total ? Math.round(stats.riskSum/stats.total) : '—';
+}
+
+function addLog(res, isAttack) {
+  const box = document.getElementById('logBox');
+  const empty = box.querySelector('.log-empty');
+  if (empty) empty.remove();
+
+  const now = new Date().toLocaleTimeString('ar', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const statusCls = isAttack ? 'attack' : (res.allowed ? 'ok' : 'denied');
+  const statusTxt = isAttack ? '[ATTACK]' : (res.allowed ? '[ALLOW] ' : '[DENY]  ');
+
+  const row = document.createElement('div');
+  row.className = 'log-row';
+  row.innerHTML = `
+    <span class="log-time">${now}</span>
+    <span class="log-status ${statusCls}">${statusTxt}</span>
+    <span class="log-msg">${res.user.name} → ${res.resource.name}${isAttack?' ⚠️ بيانات مسروقة':''} · Risk:${res.risk}</span>`;
+  box.insertBefore(row, box.firstChild);
+}
+
+// ════════════════════════════════
+//   Quick Scenarios
+// ════════════════════════════════
+const SCENARIOS = {
+  normal:     { user:'admin',    res:'secret_files',    loc:'office',  dev:'managed', time:'work_hours',  mfa:'yes', attack:false },
+  wrong_role: { user:'employee', res:'secret_files',    loc:'office',  dev:'managed', time:'work_hours',  mfa:'yes', attack:false },
+  no_mfa:     { user:'admin',    res:'secret_files',    loc:'office',  dev:'managed', time:'work_hours',  mfa:'no',  attack:false },
+  attack:     { user:'admin',    res:'secret_files',    loc:'unknown', dev:'unknown', time:'midnight',    mfa:'yes', attack:true  },
+};
+
+function loadScenario(key) {
+  const s = SCENARIOS[key];
+  // Set user
+  document.querySelectorAll('.user-card').forEach(c => {
+    c.classList.toggle('sel', c.dataset.u === s.user);
+  });
+  selectedUser = s.user;
+  // Set resource
+  document.querySelectorAll('.res-item').forEach(c => {
+    c.classList.toggle('sel', c.dataset.r === s.res);
+  });
+  selectedResource = s.res;
+  // Set context
+  document.getElementById('location').value = s.loc;
+  document.getElementById('device').value   = s.dev;
+  document.getElementById('timeSlot').value = s.time;
+  document.getElementById('mfa').value      = s.mfa;
+
+  if (s.attack) runAttack(); else runCheck(false);
+}
+
+// ════════════════════════════════
+//   Selection Handlers
+// ════════════════════════════════
+function selectUser(el, key) {
+  document.querySelectorAll('.user-card').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  selectedUser = key;
+}
+
+function selectRes(el, key) {
+  document.querySelectorAll('.res-item').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  selectedResource = key;
+}
+
+function resetAll() {
+  stats = { total:0, allowed:0, denied:0, riskSum:0 };
+  updateStats();
+  document.getElementById('logBox').innerHTML = '<div class="log-empty">// لا توجد أحداث بعد — ابدأ بفحص طلب وصول</div>';
+  document.getElementById('resultWrap').innerHTML = `
+    <div class="result-empty">
+      <div style="font-size:2rem;margin-bottom:10px">🛡️</div>
+      اختر المستخدم والمورد وعوامل السياق<br>
+ 
