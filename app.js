@@ -61,7 +61,7 @@ function policyEngine(uKey, rKey, ctx, isAttack) {
   const devLabels = { managed:'جهاز الشركة - موثوق تماماً', personal:'جهاز شخصي - مقبول بحذر', unknown:'جهاز مجهول - رفض تلقائي!' };
   const devMap = { managed:0, personal:10, unknown:35 };
   const devOK = ctx.device !== 'unknown';
-  risk += devMap[ctx.device] || 35;
+  risk += (ctx.device in devMap) ? devMap[ctx.device] : 35;
   add('نوع الجهاز (Device Trust)', devOK,
     devLabels[ctx.device] || 'مجهول',
     ctx.device==='unknown' ? 'critical' : ctx.device==='managed' ? 'low' : 'medium', 15);
@@ -70,7 +70,7 @@ function policyEngine(uKey, rKey, ctx, isAttack) {
   const locLabels = { office:'داخل مكاتب الشركة - موثوق', home:'الوصول من المنزل - مقبول مع مراقبة', unknown:'موقع مجهول - خطر على الموارد الحساسة!' };
   const locMap = { office:0, home:8, unknown:30 };
   const locOK = !(ctx.location==='unknown' && ['high','critical'].includes(r.sensitivity));
-  risk += locMap[ctx.location] || 30;
+  risk += (ctx.location in locMap) ? locMap[ctx.location] : 30;
   add('الموقع الجغرافي (Location)', locOK,
     locLabels[ctx.location] || 'مجهول',
     ctx.location==='unknown' && r.sensitivity==='critical' ? 'critical' : ctx.location==='unknown' ? 'medium' : 'info', 10);
@@ -79,7 +79,7 @@ function policyEngine(uKey, rKey, ctx, isAttack) {
   const timeLabels = { work_hours:'ضمن أوقات الدوام الرسمي - طبيعي', after_hours:'بعد الدوام - مقبول مع تسجيل', midnight:'منتصف الليل - نشاط غير اعتيادي! مشبوه.' };
   const timeMap = { work_hours:0, after_hours:10, midnight:25 };
   const timeOK = !(ctx.time==='midnight' && r.minClearance >= 2);
-  risk += timeMap[ctx.time] || 25;
+  risk += (ctx.time in timeMap) ? timeMap[ctx.time] : 25;
   add('وقت الوصول (Time Policy)', timeOK,
     timeLabels[ctx.time] || 'مجهول',
     ctx.time==='midnight' ? 'high' : 'info', 10);
@@ -196,10 +196,11 @@ function addLog(res, isAttack) {
 //   Scenarios
 // ════════════════════════════════
 var SCENARIOS = {
-  normal:     { user:'admin',    res:'secret_files', loc:'office',  dev:'managed', time:'work_hours', mfa:'yes', attack:false },
-  wrong_role: { user:'employee', res:'secret_files', loc:'office',  dev:'managed', time:'work_hours', mfa:'yes', attack:false },
-  no_mfa:     { user:'admin',    res:'secret_files', loc:'office',  dev:'managed', time:'work_hours', mfa:'no',  attack:false },
-  attack:     { user:'admin',    res:'secret_files', loc:'unknown', dev:'unknown', time:'midnight',   mfa:'yes', attack:true  },
+  normal:     { user:'admin',    res:'secret_files',    loc:'office',  dev:'managed', time:'work_hours', mfa:'yes', attack:false },
+  wrong_role: { user:'employee', res:'secret_files',    loc:'office',  dev:'managed', time:'work_hours', mfa:'yes', attack:false },
+  no_mfa:     { user:'admin',    res:'secret_files',    loc:'office',  dev:'managed', time:'work_hours', mfa:'no',  attack:false },
+  attack:     { user:'admin',    res:'secret_files',    loc:'unknown', dev:'unknown', time:'midnight',   mfa:'yes', attack:true  },
+  guest:      { user:'guest',    res:'public_dashboard',loc:'home',    dev:'personal',time:'work_hours', mfa:'no',  attack:false },
 };
 
 function loadScenario(key) {
@@ -241,8 +242,14 @@ function resetAll() {
 
 // Init data attributes
 document.addEventListener('DOMContentLoaded', function() {
-  var users = ['admin','employee','guest'];
-  document.querySelectorAll('.user-card').forEach(function(c, i){ c.dataset.u = users[i]; });
-  var ress = ['secret_files','api','database','public_dashboard'];
-  document.querySelectorAll('.res-item').forEach(function(c, i){ c.dataset.r = ress[i]; });
+  var userKeys = ['admin','employee','guest'];
+  document.querySelectorAll('.user-card').forEach(function(c, i){
+    c.dataset.u = userKeys[i];
+    c.setAttribute('onclick', "selectUser(this,'" + userKeys[i] + "')");
+  });
+  var resKeys = ['secret_files','api','database','public_dashboard'];
+  document.querySelectorAll('.res-item').forEach(function(c, i){
+    c.dataset.r = resKeys[i];
+    c.setAttribute('onclick', "selectRes(this,'" + resKeys[i] + "')");
+  });
 });
