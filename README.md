@@ -176,7 +176,7 @@ print(decision.to_dict())   # JSON كامل
 
 ## 🤝 المساهمة
 
-هذا مشروع أكاديمي مفتوح للتطوير. يمكنك:
+هذا مشروع مفتوح للتطوير. يمكنك:
 - إضافة موارد أو مستخدمين جدد
 - تعديل قواعد السياسات في `policy_engine.py`
 - إضافة فحوصات أمنية إضافية
@@ -185,7 +185,7 @@ print(decision.to_dict())   # JSON كامل
 
 ## 👨‍💻 المطور
 
-**Bader Alotaibi** — مشروع أمن سيبراني وشبكات
+**Bader Alotaibi** — 
 
 ---
 
@@ -196,5 +196,5 @@ MIT License — استخدم الكود بحرية مع الإشارة للمص�
 ---
 
 <div align="center">
-  <sub>مشروع أمن سيبراني وشبكات · Zero Trust Simulator · <strong>Bader Alotaibi</strong></sub>
+  <sub> · Zero Trust Simulator · <strong>Bader Alotaibi</strong></sub>
 </div>
